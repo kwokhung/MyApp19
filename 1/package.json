@@ -1,0 +1,12 @@
+{
+    "name": "LivingStrategy",
+    "version": "0.0.1",
+    "description": "Living Strategy",
+    "dependencies": {
+        "ejs": "*",
+        "express": "*",
+        "socket.io": "*",
+        "express.io": "*"
+    },
+    "main": "server.js"
+}
