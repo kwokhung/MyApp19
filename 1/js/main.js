@@ -36,13 +36,13 @@ define([
         var codeStore = new CodeStore();
         var tokenStore = new TokenStore();
 
-        var server = oauth2orize.createServer();
+        var oauthServer = oauth2orize.createServer();
 
-        server.serializeClient(function (client, done) {
+        oauthServer.serializeClient(function (client, done) {
             return done(null, client.id);
         });
 
-        server.deserializeClient(function (id, done) {
+        oauthServer.deserializeClient(function (id, done) {
             clientStore.find(id, function (error, client) {
                 if (error) {
                     return done(error);
@@ -53,7 +53,7 @@ define([
             });
         });
 
-        server.grant(oauth2orize.grant.code(function (client, redirectURI, user, ares, done) {
+        oauthServer.grant(oauth2orize.grant.code(function (client, redirectURI, user, ares, done) {
             var code = generalHelper.uid(16)
 
             codeStore.save(code, client.id, redirectURI, user.id, ares.scope, function (error) {
@@ -66,7 +66,7 @@ define([
             });
         }));
 
-        server.exchange(oauth2orize.exchange.code(function (client, code, redirectURI, done) {
+        oauthServer.exchange(oauth2orize.exchange.code(function (client, code, redirectURI, done) {
             codeStore.find(code, function (error, authCode) {
                 if (error) {
                     return done(error);
@@ -233,22 +233,22 @@ define([
             res.send("OAuth 2.0 Server");
         });
 
-        app.get("/login", function (req, res) {
+        app.get("/user/login", function (req, res) {
             res.render("login");
         });
 
-        app.get("/logout", function (req, res) {
+        app.get("/user/logout", function (req, res) {
             req.logout();
             res.redirect("/");
         });
 
-        app.get("/account", connectEnsureLogin.ensureLoggedIn("/login"), function (req, res) {
+        app.get("/user/account", connectEnsureLogin.ensureLoggedIn("/user/login"), function (req, res) {
             res.render("account", {
                 user: req.user
             });
         });
 
-        app.get("/dialog/authorize", connectEnsureLogin.ensureLoggedIn("/login"), server.authorization(function (clientID, redirectURI, done) {
+        app.get("/user/authorize", connectEnsureLogin.ensureLoggedIn("/user/login"), oauthServer.authorization(function (clientID, redirectURI, done) {
             clientStore.findByClientId(clientID, function (error, client) {
                 if (error) {
                     return done(error);
@@ -258,7 +258,7 @@ define([
                 }
             });
         }), function (req, res) {
-            res.render("dialog", {
+            res.render("authorize", {
                 transactionID: req.oauth2.transactionID,
                 user: req.user,
                 client: req.oauth2.client,
@@ -274,11 +274,15 @@ define([
                 res.end("Out of scope");
             }
             else {
-                res.json({ user_id: req.user.id, name: req.user.name, scope: req.authInfo.scope })
+                res.json({
+                    user_id: req.user.id,
+                    name: req.user.name,
+                    scope: req.authInfo.scope
+                })
             }
         });
 
-        app.post("/login", function (req, res, next) {
+        app.post("/user/login", function (req, res, next) {
             passport.authenticate("local", function (error, user, info) {
                 if (error) {
                     return next(error);
@@ -290,7 +294,7 @@ define([
                         ];
                     }
 
-                    return res.redirect("/login");
+                    return res.redirect("/user/login");
                 }
                 else {
                     req.logIn(user, function (error) {
@@ -314,18 +318,21 @@ define([
             return res.redirect(url);
         });
 
-        app.post("/dialog/authorize/decision", connectEnsureLogin.ensureLoggedIn(), server.decision(null, function (req, done) {
+        app.post("/user/authorize", connectEnsureLogin.ensureLoggedIn("/user/login"), oauthServer.decision(null, function (req, done) {
             var ares = {};
             ares.scope = req.oauth2.req.scope;
             done(null, ares);
         }));
 
-        app.post("/oauth/token",
-            passport.authenticate(["basic", "oauth2-client-password"], {
+        app.post("/client/getToken",
+            passport.authenticate([
+                "basic",
+                "oauth2-client-password"
+            ], {
                 session: false
             }),
-            server.token(),
-            server.errorHandler()
+            oauthServer.token(),
+            oauthServer.errorHandler()
         );
 
         app.listen(process.env.PORT || 3100);
